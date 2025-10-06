@@ -7,9 +7,10 @@ import session from "express-session";
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 5678;
+const PORT = process.env.PORT || 5677;
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
+const CALLBACK_URL = process.env.CALLBACK_URL;
 
 app.use(
   session({
@@ -19,6 +20,66 @@ app.use(
     cookie: { secure: false, maxAge: 24*60*60*1000 }, // secure: true only with https
   })
 );
+
+app.use(passport.initialize());
+app.use(passport.session());
+
+passport.use(
+  new GoogleStrategy(
+    {
+      clientID: GOOGLE_CLIENT_ID,
+      clientSecret: GOOGLE_CLIENT_SECRET,
+      callbackURL: CALLBACK_URL,
+      passReqToCallback: true,
+    },
+    function (request, accessToken, refreshToken, profile, done) {
+      // User.findOrCreate({ googleId: profile.id }, function (err, user) {
+      // console.log(profile)
+        return done(null, profile);
+      // });
+    }
+  )
+);
+
+passport.serializeUser(function (user, done) {
+  done(null, user);
+});
+
+passport.deserializeUser(function (user, done) {
+  done(null, user);
+});
+
+function isLoggedIn(req, res, next) {
+  req.user ? next() : res.redirect("/");
+}
+
+app.get("/", (req, res) => {
+  res.send("<a href='/auth/google'>Login with Google </a>");
+})
+
+app.get("/auth/google", passport.authenticate("google", { scope: ["profile", "email"] })
+);
+
+app.get(
+  "/auth/google/callback",
+  passport.authenticate("google", {
+    failureRedirect: "/auth/failure",
+    successRedirect: "/protected",
+  })
+);
+
+app.get("/protected", isLoggedIn, (req, res) => {
+  if (req.user) {
+    res.send('You are authenticated!');
+  } else {
+    res.send("You are not authenticated!")
+  }
+});
+
+app.get("/auth/failure", (req, res) => {
+  res.send("Auth Failure!")
+})
+
 
 app.listen(PORT, () => {
   console.log(`Example app listening on port ${PORT}`);
